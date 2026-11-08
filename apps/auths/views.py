@@ -3,9 +3,9 @@ from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.auths.serializers import UserRegisterSerializer
+
 
 class RegisterView(APIView):
     permission_classes = (AllowAny,)

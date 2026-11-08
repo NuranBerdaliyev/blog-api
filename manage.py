@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 import os
 import sys
+
 from decouple import Config, RepositoryEnv
+
 
 def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
