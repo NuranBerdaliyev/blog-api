@@ -4,6 +4,7 @@ from settings.conf import BLOG_SECRET_KEY, BASE_DIR
 SECRET_KEY = BLOG_SECRET_KEY
 
 INSTALLED_APPS = [
+    'unfold',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

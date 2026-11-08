@@ -1,2 +1,5 @@
 -r base.txt
+django-unfold==0.110.1
+Faker==40.44.0
+PyJWT==2.15.1
 ruff==0.16.9
