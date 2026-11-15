@@ -1,0 +1,49 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n unfold %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-4 mb-4 lg:flex-row">
+    <div class="flex-1">
+        {% component "unfold/components/card.html" with title="Total Users" %}
+            <p class="text-3xl font-semibold">{{ total_users }}</p>
+        {% endcomponent %}
+    </div>
+    <div class="flex-1">
+        {% component "unfold/components/card.html" with title="Published Posts" %}
+            <p class="text-3xl font-semibold">{{ published_posts }}</p>
+        {% endcomponent %}
+    </div>
+    <div class="flex-1">
+        {% component "unfold/components/card.html" with title="Draft Posts" %}
+            <p class="text-3xl font-semibold">{{ draft_posts }}</p>
+        {% endcomponent %}
+    </div>
+    <div class="flex-1">
+        {% component "unfold/components/card.html" with title="Total Comments" %}
+            <p class="text-3xl font-semibold">{{ total_comments }}</p>
+        {% endcomponent %}
+    </div>
+</div>
+
+<div class="flex flex-col gap-4 mb-4 lg:flex-row">
+    <div class="flex-1">
+        {% component "unfold/components/card.html" with title="Posts per Category (Top 5)" %}
+            {% component "unfold/components/chart/bar.html" with data=category_chart height=300 %}{% endcomponent %}
+        {% endcomponent %}
+    </div>
+    <div class="flex-1">
+        {% component "unfold/components/card.html" with title="Post Status Ratio" %}
+            <div class="flex flex-col gap-6">
+                {% component "unfold/components/progress.html" with title="Published" description=published_label value=published_percentage %}{% endcomponent %}
+                {% component "unfold/components/progress.html" with title="Drafts" description=draft_label value=draft_percentage %}{% endcomponent %}
+            </div>
+        {% endcomponent %}
+    </div>
+</div>
+
+{% component "unfold/components/card.html" with title="Top 5 Authors" %}
+    {% component "unfold/components/table.html" with table=top_authors_table %}{% endcomponent %}
+{% endcomponent %}
+{% endblock %}
