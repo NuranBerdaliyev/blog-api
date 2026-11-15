@@ -1,11 +1,13 @@
 import random
 import time
+from datetime import timedelta
 from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db import transaction
+from django.utils import timezone
 from django.utils.text import slugify
 from faker import Faker
 
@@ -23,6 +25,12 @@ INACTIVE_USER_RATIO = 0.15
 STAFF_USER_RATIO = 0.10
 PUBLISHED_POST_RATIO = 0.70
 NO_CATEGORY_RATIO = 0.10
+
+POST_DATE_RANGE_DAYS = 365
+EDITED_POST_RATIO = 0.30
+MIN_EDIT_DELAY_DAYS = 1
+MAX_EDIT_DELAY_DAYS = 30
+SECONDS_PER_DAY = 86400
 
 MIN_TITLE_WORDS = 3
 MAX_TITLE_WORDS = 7
@@ -94,15 +102,15 @@ class Command(BaseCommand):
             users_created = self._create_users(users_count)
             categories_created = self._create_categories()
             tags_created = self._create_tags()
-            posts_created = self._create_posts(posts_count, comments_count > 0, remaining_published > 0)
-            comments_created = self._create_comments(comments_count)
+            created_posts = self._create_posts(posts_count, comments_count > 0, remaining_published > 0)
+            comments_created = self._create_comments(comments_count, created_posts)
 
         elapsed_time = round(time.time() - start_time, ELAPSED_DIGITS)
 
         self._write_summary("Users", users_created)
         self._write_summary("Categories", categories_created)
         self._write_summary("Tags", tags_created)
-        self._write_summary("Posts", posts_created)
+        self._write_summary("Posts", len(created_posts))
         self._write_summary("Comments", comments_created)
         self.stdout.write(self.style.SUCCESS(f"Done in {elapsed_time} seconds"))
 
@@ -157,9 +165,9 @@ class Command(BaseCommand):
         ]
         return len(Tag.objects.bulk_create(tags_to_create))
 
-    def _create_posts(self, count: int, need_published: bool, has_published: bool) -> int:
+    def _create_posts(self, count: int, need_published: bool, has_published: bool) -> list[Post]:
         if count == 0:
-            return 0
+            return []
 
         user_ids = list(User.objects.values_list("id", flat=True))
         category_ids = list(Category.objects.values_list("id", flat=True))
@@ -195,6 +203,22 @@ class Command(BaseCommand):
 
         created_posts = Post.objects.bulk_create(posts_to_create)
 
+        now = timezone.now()
+        for post in created_posts:
+            created_at = now - timedelta(seconds=random.randint(0, POST_DATE_RANGE_DAYS * SECONDS_PER_DAY))
+            updated_at = created_at
+            if random.random() < EDITED_POST_RATIO:
+                delay = timedelta(
+                    seconds=random.randint(
+                        MIN_EDIT_DELAY_DAYS * SECONDS_PER_DAY,
+                        MAX_EDIT_DELAY_DAYS * SECONDS_PER_DAY,
+                    )
+                )
+                updated_at = min(created_at + delay, now)
+            post.created_at = created_at
+            post.updated_at = updated_at
+        Post.objects.bulk_update(created_posts, ["created_at", "updated_at"])
+
         post_tag_model = Post.tags.through
         relations = []
         for post in created_posts:
@@ -204,25 +228,38 @@ class Command(BaseCommand):
         if relations:
             post_tag_model.objects.bulk_create(relations)
 
-        return len(created_posts)
+        return created_posts
 
-    def _create_comments(self, count: int) -> int:
+    def _create_comments(self, count: int, created_posts: list[Post]) -> int:
         if count == 0:
             return 0
 
-        published_ids = list(
-            Post.objects.filter(status=Post.StatusChoices.PUBLISHED).values_list("id", flat=True)
-        )
-        if not published_ids:
+        post_dates = {
+            post.id: post.created_at for post in created_posts if post.status == Post.StatusChoices.PUBLISHED
+        }
+        if not post_dates:
+            post_dates = dict(
+                Post.objects.filter(status=Post.StatusChoices.PUBLISHED).values_list("id", "created_at")
+            )
+        if not post_dates:
             raise CommandError("Cannot create comments because there are no published posts.")
 
+        post_ids = list(post_dates)
         user_ids = list(User.objects.values_list("id", flat=True))
         comments_to_create = [
             Comment(
-                post_id=random.choice(published_ids),
+                post_id=random.choice(post_ids),
                 author_id=random.choice(user_ids),
                 body=" ".join(fake.sentences(nb=random.randint(MIN_COMMENT_SENTENCES, MAX_COMMENT_SENTENCES))),
-            )
-            for _ in range(count)
+            ) for _ in range(count)
         ]
-        return len(Comment.objects.bulk_create(comments_to_create))
+        created_comments = Comment.objects.bulk_create(comments_to_create)
+
+        now =timezone.now()
+        for comment in created_comments:
+            post_created_at = post_dates[comment.post_id]
+            span = int((now - post_created_at).total_seconds())
+            comment.created_at = post_created_at + timedelta(seconds=random.randint(0, span))
+        Comment.objects.bulk_update(created_comments, ["created_at"])
+
+        return len(created_comments)
